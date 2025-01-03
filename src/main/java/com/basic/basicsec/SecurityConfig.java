@@ -3,6 +3,7 @@ package com.basic.basicsec;
 import com.basic.basicsec.jwt.AuthEntryPointJwt;
 import com.basic.basicsec.jwt.AuthTokenFilter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,6 +22,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.JdbcUserDetailsManager;
 import org.springframework.security.provisioning.UserDetailsManager;
@@ -28,6 +30,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import javax.sql.DataSource;
+import java.util.HashMap;
+import java.util.Map;
 
 
 @Configuration
@@ -49,7 +53,7 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests((requests) ->
                 requests.requestMatchers("/h2-console/**").permitAll()
-                        .requestMatchers("/api/signin").permitAll()
+                        .requestMatchers("/signin").permitAll()
                         .anyRequest().authenticated());
         http.sessionManagement((session) ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
@@ -67,13 +71,15 @@ public class SecurityConfig {
 
 
     @Bean
-    public PasswordEncoder passwordEncoder(){
-        return new BCryptPasswordEncoder();
+    public PasswordEncoder passwordEncoder() {
+        String idForEncode = "bcrypt";
+        Map<String, PasswordEncoder> encoders = new HashMap<>();
+        encoders.put(idForEncode, new BCryptPasswordEncoder());
+        return new DelegatingPasswordEncoder(idForEncode, encoders);
     }
 
-
     @Bean
-    public UserDetailsManager userDetailsManager(DataSource dataSource) {
+    public UserDetailsService userDetailsService(DataSource dataSource) {
         return new JdbcUserDetailsManager(dataSource);
     }
 
@@ -91,13 +97,25 @@ public class SecurityConfig {
 
 
     @Bean
-    public UserDetailsService userDetailsService(UserDetailsManager userDetailsManager) {
-        UserDetails user1 = User.withUsername("user1").password(passwordEncoder().encode("qweqweqwe")).roles("USER").build();
-        UserDetails admin = User.withUsername("admin").password(passwordEncoder().encode("qweqweqwe")).roles("ADMIN").build();
+    public CommandLineRunner initData(UserDetailsService userDetailsService){
+        return args -> {
+            JdbcUserDetailsManager manager = (JdbcUserDetailsManager) userDetailsService;
+            UserDetails user1 = User
+                    .withUsername("user1")
+                    .password(passwordEncoder().encode("qweqweqwe"))
+                    .roles("USER")
+                    .build();
+            UserDetails admin = User
+                    .withUsername("admin")
+                    .password(passwordEncoder().encode("qweqweqwe"))
+                    .roles("ADMIN")
+                    .build();
 
-        userDetailsManager.createUser(user1);
-        userDetailsManager.createUser(admin);
-
-        return userDetailsManager;
+            JdbcUserDetailsManager userDetailsManager = new JdbcUserDetailsManager();
+            manager.createUser(user1);
+            manager.createUser(admin);
+        };
     }
+
+
 }
